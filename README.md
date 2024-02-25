@@ -1,6 +1,6 @@
-# terraform-sops
+# terraform-provider-sops
 
-A Terraform plugin for using files encrypted with [Mozilla sops](https://github.com/mozilla/sops).
+A Terraform provider to encrypt and decrypt files with [Mozilla sops](https://github.com/mozilla/sops).
 
 **NOTE:** To prevent plaintext secrets from being written to disk, you *must* set up a secure remote state backend. See the [official docs](https://www.terraform.io/docs/state/sensitive-data.html) on _Sensitive Data in State_ for more information.
 
@@ -62,7 +62,7 @@ output "do-something" {
 ```
 
 ### sops_external
-For use with reading files that might not be local. 
+For use with reading files that might not be local.
 
 > `input_type` is required with this data source.
 
@@ -113,7 +113,7 @@ terraform {
 
 ## CI usage
 
-For CI, the same variables or context that SOPS uses locally must be provided in the runtime. The provider does not manage the required values. 
+For CI, the same variables or context that SOPS uses locally must be provided in the runtime. The provider does not manage the required values.
 
 ## Development
 Building and testing is most easily performed with `make build` and `make test` respectively.
@@ -135,13 +135,13 @@ terraform {
 }
 ```
 
-A prerequisite when converting is that you must remove the data source block from the previous SOPS provider in your `terraform.state` file. 
+A prerequisite when converting is that you must remove the data source block from the previous SOPS provider in your `terraform.state` file.
 This can be done via:
 ```shell
 terraform state replace-provider registry.terraform.io/-/sops registry.terraform.io/carlpett/sops
 ```
 
-If not you will be greeted with: 
+If not you will be greeted with:
 ```shell
 - Finding latest version of -/sops...
 
@@ -151,5 +151,3 @@ Could not retrieve the list of available versions for provider -/sops:
 provider registry registry.terraform.io does not have a provider named
 registry.terraform.io/-/sops
 ```
-
-

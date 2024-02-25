@@ -29,7 +29,7 @@
         in
         {
           default = pkgs.mkShell {
-            buildInputs = with pkgs; [ go gopls gotools go-tools ];
+            buildInputs = with pkgs; [ go gopls gotools go-tools gox sops ];
           };
         });
       defaultPackage = forAllSystems (system: self.packages.${system}.terraform-provider-sops);
