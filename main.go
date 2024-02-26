@@ -5,7 +5,12 @@ import (
 	"flag"
 	"log"
 
+	"github.com/carlpett/terraform-provider-sops/internal/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+)
+
+var (
+	version string = "dev"
 )
 
 func main() {
@@ -14,10 +19,9 @@ func main() {
 	flag.BoolVar(&debug, "debug", false, "set to true to run the provider with support for debuggers like delve")
 	flag.Parse()
 
-	err := providerserver.Serve(context.Background(), nil, providerserver.ServeOpts{
-		Address:         "registry.terraform.io/sunziping2016/sops",
-		Debug:           debug,
-		ProtocolVersion: 5,
+	err := providerserver.Serve(context.Background(), provider.New(version), providerserver.ServeOpts{
+		Address: "registry.terraform.io/sunziping2016/sops",
+		Debug:   debug,
 	})
 	if err != nil {
 		log.Fatal(err)

@@ -1,0 +1,6 @@
+keys:
+  - &sops_testing 811B2B9D8815710F13105517F15D3C50575B206E
+creation_rules:
+  - key_groups:
+      - pgp:
+          - *sops_testing
