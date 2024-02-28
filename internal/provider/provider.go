@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/getsops/sops/v3/aes"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -87,13 +86,13 @@ func (p *sopsProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		}
 	}
 
-	client := &sopsClient{
-		configPath: configPath,
-		cipher:     aes.NewCipher(),
-	}
+	// client := &sopsClient{
+	// 	configPath: configPath,
+	// 	cipher:     aes.NewCipher(),
+	// }
 
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	// resp.DataSourceData = client
+	// resp.ResourceData = client
 }
 
 func (p *sopsProvider) DataSources(ctx context.Context) []func() datasource.DataSource {

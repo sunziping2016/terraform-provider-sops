@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/carlpett/terraform-provider-sops/internal/localtypes"
 	"github.com/getsops/sops/v3"
 	"github.com/getsops/sops/v3/aes"
 	"github.com/getsops/sops/v3/cmd/sops/common"
@@ -20,7 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -78,18 +76,6 @@ func (n *sopsFileResource) Schema(ctx context.Context, req resource.SchemaReques
 					),
 				},
 			},
-			"file_permission": schema.StringAttribute{
-				CustomType: localtypes.NewFilePermissionType(),
-				Description: "Permissions to set for the output file (before umask), expressed as string in\n " +
-					"[numeric notation](https://en.wikipedia.org/wiki/File-system_permissions#Numeric_notation).\n " +
-					"Default value is `\"0777\"`.",
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString("0777"),
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
 		},
 	}
 }
@@ -99,20 +85,6 @@ func (n *sopsFileResource) Metadata(ctx context.Context, req resource.MetadataRe
 }
 
 func (n *sopsFileResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*sopsClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected provider data type",
-			fmt.Sprintf("Expected *sopsClient, got %T", req.ProviderData),
-		)
-		return
-	}
-
-	n.configPath = client.configPath
 }
 
 func (n *sopsFileResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
