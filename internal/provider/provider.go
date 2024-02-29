@@ -3,12 +3,17 @@ package provider
 import (
 	"context"
 	"os"
+	"regexp"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/providervalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -36,8 +41,27 @@ func (p *sopsProvider) Metadata(ctx context.Context, req provider.MetadataReques
 func (p *sopsProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"config": schema.StringAttribute{
+			"disable_local_key_service": schema.BoolAttribute{
 				Optional: true,
+				Description: "Disable the local key service. " +
+					"Can also be set using a non-empty `SOPS_DISABLE_LOCAL_KEY_SERVICE` environment variable. " +
+					"If set, you must provide `key_service_uris` to make the key discovery work.",
+			},
+			"key_service_uris": schema.SetAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "The URIs of the key service. " +
+					"Can also be set using the comma-separated `SOPS_KEY_SERVICE_URIS` environment variable. " +
+					"You can start the server-side key service by running `sops keyserver`. " +
+					"Examples: `tcp://myserver.com:5000`, `unix:///var/run/sops.sock`.",
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(
+						stringvalidator.RegexMatches(
+							regexp.MustCompile(`^(tcp|unix)://.+$`),
+							"The key service URI must start with `tcp://` or `unix://`.",
+						),
+					),
+				},
 			},
 		},
 	}
@@ -95,6 +119,14 @@ func (p *sopsProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	// resp.ResourceData = client
 }
 
+func (p *sopsProvider) ConfigValidators(ctx context.Context) []provider.ConfigValidator {
+	return []provider.ConfigValidator{
+		providervalidator.AtLeastOneOf(
+			path.MatchRoot("disable_local_key_service"),
+			path.MatchRoot("key_service_uris").AtAnyListIndex(),
+		),
+	}
+}
 func (p *sopsProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewSopsFileDataSource,
