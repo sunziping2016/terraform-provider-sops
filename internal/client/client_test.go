@@ -24,11 +24,7 @@ var testMetadataOpts = MetadataOpts{
 }
 
 func TestSopsClient(t *testing.T) {
-	keyServices, err := NewKeyServices(DefaultKeyServiceOpts)
-	if err != nil {
-		t.Fatalf("failed to create key services: %v", err)
-	}
-	sopsClient := NewSopsClient(keyServices)
+	sopsClient := NewSopsClient(DefaultKeyService())
 	stores := NewStores(&StoreOpts{
 		DecryptedFormat: formats.Yaml,
 		EncryptedFormat: formats.Json,
@@ -41,20 +37,24 @@ func TestSopsClient(t *testing.T) {
 	assert.Equal(t, &testMetadataOpts, &recoveredMetadataOpts, "recovered metadata should match original metadata")
 
 	content := []byte("a: 1\nb: 2\n")
-	encrypted := sopsClient.MustEncrypt(content, EncryptOpts{
-		Metadata: metadata,
-		Stores:   stores,
-	})
-	decrypted := sopsClient.MustDecrypt(encrypted, DecryptOpts{Stores: stores})
-	assert.Equal(t, content, decrypted, "decrypted content should match original content")
+	encrypted, err := sopsClient.Encrypt(content, EncryptOpts{Metadata: metadata, Stores: stores})
+	assert.NoError(t, err, "encryption should succeed")
+
+	decrypted, err := sopsClient.Decrypt(encrypted.Content, DecryptOpts{Stores: stores})
+	assert.NoError(t, err, "decryption should succeed")
+	assert.Equal(t, content, decrypted.Content, "decrypted content should match original content")
 
 	content = []byte("a: 2\nb: 3\n")
-	encrypted = sopsClient.MustEdit(encrypted, content, EditOpts{Stores: stores})
-	decrypted = sopsClient.MustDecrypt(encrypted, DecryptOpts{Stores: stores})
-	assert.Equal(t, content, decrypted, "decrypted content should match edited content")
+	edited, err := sopsClient.Edit(encrypted.Content, content, EditOpts{Stores: stores})
+	assert.NoError(t, err, "editing should succeed")
+	decrypted, err = sopsClient.Decrypt(edited.Content, DecryptOpts{Stores: stores})
+	assert.NoError(t, err, "decryption should succeed")
+	assert.Equal(t, content, decrypted.Content, "decrypted content should match edited content")
 
 	content = []byte("a: 3\nb: 4\n")
-	encrypted = sopsClient.MustEdit(encrypted, content, EditOpts{Stores: stores})
-	decrypted = sopsClient.MustDecrypt(encrypted, DecryptOpts{Stores: stores})
-	assert.Equal(t, content, decrypted, "decrypted content should match edited content")
+	edited, err = sopsClient.Edit(edited.Content, content, EditOpts{Stores: stores})
+	assert.NoError(t, err, "editing should succeed")
+	decrypted, err = sopsClient.Decrypt(edited.Content, DecryptOpts{Stores: stores})
+	assert.NoError(t, err, "decryption should succeed")
+	assert.Equal(t, content, decrypted.Content, "decrypted content should match edited content")
 }

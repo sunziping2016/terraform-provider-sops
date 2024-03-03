@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -12,44 +11,58 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type KeyServiceOpts struct {
-	DisableLocalKeyService bool
-	KeyServiceURIs         []string
+type KeyServiceBuilder struct {
+	keyServices []keyservice.KeyServiceClient
 }
 
-var DefaultKeyServiceOpts = &KeyServiceOpts{}
+func NewKeyServiceBuilder() *KeyServiceBuilder {
+	return &KeyServiceBuilder{}
+}
 
-func NewKeyServices(o *KeyServiceOpts) ([]keyservice.KeyServiceClient, error) {
-	var svcs []keyservice.KeyServiceClient
-	if !o.DisableLocalKeyService {
-		svcs = append(svcs, keyservice.NewLocalClient())
+func (b *KeyServiceBuilder) AddLocalKeyService() {
+	b.keyServices = append(b.keyServices, keyservice.NewLocalClient())
+}
+
+func (b *KeyServiceBuilder) AddKeyServiceWithURI(keyServiceURI string) error {
+	url, err := url.Parse(keyServiceURI)
+	if err != nil {
+		return fmt.Errorf("failed to parse key service URI: %w", err)
 	}
-	var errs []error
-	for _, uri := range o.KeyServiceURIs {
-		url, err := url.Parse((uri))
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to parse key service URI %s: %w", uri, err))
-			continue
-		}
-		addr := url.Host
-		if url.Scheme == "unix" {
-			addr = url.Path
-		}
-		conn, err := grpc.Dial(addr,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithContextDialer(
-				func(ctx context.Context, addr string) (net.Conn, error) {
-					return (&net.Dialer{}).DialContext(ctx, url.Scheme, addr)
-				},
-			))
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to dial key service at %s: %w", uri, err))
-			continue
-		}
-		svcs = append(svcs, keyservice.NewKeyServiceClient(conn))
+	addr := url.Host
+	if url.Scheme == "unix" {
+		addr = url.Path
 	}
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
+	conn, err := grpc.Dial(addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(
+			func(ctx context.Context, addr string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, url.Scheme, addr)
+			},
+		))
+	if err != nil {
+		return fmt.Errorf("failed to dial key service: %w", err)
 	}
-	return svcs, nil
+	b.keyServices = append(b.keyServices, keyservice.NewKeyServiceClient(conn))
+	return nil
+}
+
+func (b *KeyServiceBuilder) Build() ([]keyservice.KeyServiceClient, error) {
+	if len(b.keyServices) == 0 {
+		return nil, fmt.Errorf("no key service specified. Please either enable the local key service or specify at least one key service URI")
+	}
+	return b.keyServices, nil
+}
+
+func (b *KeyServiceBuilder) MustBuild() []keyservice.KeyServiceClient {
+	keyServices, err := b.Build()
+	if err != nil {
+		panic(err)
+	}
+	return keyServices
+}
+
+func DefaultKeyService() []keyservice.KeyServiceClient {
+	b := NewKeyServiceBuilder()
+	b.AddLocalKeyService()
+	return b.MustBuild()
 }

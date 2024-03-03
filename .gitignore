@@ -4,3 +4,5 @@ releases/
 terraform-provider-sops
 .direnv/
 result
+.terraformrc
+.vscode/

@@ -1,12 +1,13 @@
-hello: ENC[AES256_GCM,data:gzR9Gz4=,iv:cbMZU1nUyo5mFCW+Vel2UYbnbMA/0wKxsQzy/WVAYw8=,tag:tETDJMCJYo+4K4LwsSw4Dw==,type:str]
+hello:
+    - world: ENC[AES256_GCM,data:+A==,iv:whBhFfD/EDoW6Uc3GMquBQABhZbtiZWINdKeqmFgZho=,tag:6bXhcJT1l09ux4pcLK+g4g==,type:int]
 sops:
     kms: []
     gcp_kms: []
     azure_kv: []
     hc_vault: []
     age: []
-    lastmodified: "2024-02-25T16:36:37Z"
-    mac: ENC[AES256_GCM,data:1KGS4Tvy6G4mrolWU8mj1tBxgd5zr5DjV7OxSMjenx/aztYRSPYvfy8FCinwP04voHOFMP+nakHa4IN00klOrXOngYAIyvK+kQHK61yl1iLXFqL1q2DsYf7qFbJJfjhUxPHkbJe0YMI709TpZ7s1SE+ZSXoNczr+gWiYI7PtZG0=,iv:uSt+lEPx2l65D9RP5n8+IMG4Z+m1ovVgwZk+ShaM6Qg=,tag:fGv1iw27aLUrFjml3h/F2A==,type:str]
+    lastmodified: "2024-03-03T15:40:25Z"
+    mac: ENC[AES256_GCM,data:D2Lw2foV0eJDMCFSxgyU106BbQx9gHU3GI7mC7mzX9v5NazXRyKasWF8J3nayVfGmfoPzj6zqNWhPLsJybxGlKayLfk2D1WSvnLFPY2/sLTee98T++TGsOEPVLYdhgnc6r9SvAkdkO64FGJhdLT8fLeA2DKegLhsBqbtqGoy76M=,iv:Ne7MqvxzQC35TKWc6g6UeCEmGTEZzpHKdl7zqd7j8/E=,tag:eIvdlXnNTVoKl6o3Qy/JAw==,type:str]
     pgp:
         - created_at: "2019-01-23T10:01:20Z"
           enc: |-

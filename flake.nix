@@ -7,7 +7,7 @@
       version = builtins.substring 0 8 lastModifiedDate;
       supportedSystems = [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-      nixpkgsFor = forAllSystems (system: import nixpkgs { inherit system; });
+      nixpkgsFor = forAllSystems (system: import nixpkgs { inherit system; config.allowUnfree = true; });
     in
     {
       packages = forAllSystems (system:
@@ -20,7 +20,7 @@
             inherit version;
             src = ./.;
             doCheck = false;
-            vendorHash = "sha256-8W1PK4T98iK1N6EB6AVjvr1P9Ja51+kSOmYAEosxrh8=";
+            vendorHash = "sha256-dpxGEuR+QkA1iqHsHNAr2Jcc1WYodQrECoxvjhrRrk0=";
           };
         });
       devShells = forAllSystems (system:
@@ -29,7 +29,20 @@
         in
         {
           default = pkgs.mkShell {
-            buildInputs = with pkgs; [ go gopls gotools go-tools gox sops ];
+            buildInputs = with pkgs; [ go gopls gotools go-tools gox delve sops tfplugindocs terraform watchexec ];
+            shellHook = ''
+              cat <<EOF > .terraformrc
+              provider_installation {
+                dev_overrides {
+                  "sops" = "$(pwd)"
+                }
+                direct {}
+              }
+              EOF
+
+              export TF_CLI_CONFIG_FILE="$(pwd)/.terraformrc"
+            '';
+            hardeningDisable = [ "fortify" ];
           };
         });
       defaultPackage = forAllSystems (system: self.packages.${system}.terraform-provider-sops);

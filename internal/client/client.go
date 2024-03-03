@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/getsops/sops/v3"
 	"github.com/getsops/sops/v3/aes"
@@ -27,11 +28,16 @@ type DecryptOpts struct {
 	IgnoreMAC bool
 }
 
-func (c *SopsClient) Decrypt(bytes []byte, o DecryptOpts) ([]byte, error) {
+type DecryptResults struct {
+	Content  []byte
+	Metadata sops.Metadata
+}
+
+func (c *SopsClient) Decrypt(encrypted []byte, o DecryptOpts) (DecryptResults, error) {
 	// Step 1: deserialize
-	tree, err := o.Encrypted.LoadEncryptedFile(bytes)
+	tree, err := o.Encrypted.LoadEncryptedFile(encrypted)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse encrypted content: %w", err)
+		return DecryptResults{}, fmt.Errorf("failed to parse encrypted content: %w", err)
 	}
 
 	// Step 2: decrypt
@@ -42,23 +48,18 @@ func (c *SopsClient) Decrypt(bytes []byte, o DecryptOpts) ([]byte, error) {
 		KeyServices: c.keyServices,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt content: %w", err)
+		return DecryptResults{}, fmt.Errorf("failed to decrypt content: %w", err)
 	}
 
 	// Step 3: serialize
-	result, err := o.Decrypted.EmitPlainFile(tree.Branches)
+	decrypted, err := o.Stores.Decrypted.EmitPlainFile(tree.Branches)
 	if err != nil {
-		return nil, fmt.Errorf("failed to emit decrypted content: %w", err)
+		return DecryptResults{}, fmt.Errorf("failed to emit decrypted content: %w", err)
 	}
-	return result, err
-}
-
-func (c *SopsClient) MustDecrypt(bytes []byte, o DecryptOpts) []byte {
-	result, err := c.Decrypt(bytes, o)
-	if err != nil {
-		panic(err)
-	}
-	return result
+	return DecryptResults{
+		Content:  decrypted,
+		Metadata: tree.Metadata,
+	}, nil
 }
 
 type EncryptOpts struct {
@@ -66,14 +67,19 @@ type EncryptOpts struct {
 	sops.Metadata
 }
 
-func (c *SopsClient) Encrypt(bytes []byte, o EncryptOpts) ([]byte, error) {
+type EncryptResults struct {
+	Content      []byte
+	LastModified time.Time
+}
+
+func (c *SopsClient) Encrypt(origin []byte, o EncryptOpts) (EncryptResults, error) {
 	// Step 1: deserialize
-	branches, err := o.Decrypted.LoadPlainFile(bytes)
+	branches, err := o.Decrypted.LoadPlainFile(origin)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse plain content: %w", err)
+		return EncryptResults{}, fmt.Errorf("failed to parse plain content: %w", err)
 	}
 	if len(branches) < 1 {
-		return nil, fmt.Errorf("content must not be empty, i.e., it must contain at least one document")
+		return EncryptResults{}, fmt.Errorf("content must not be empty, i.e., it must contain at least one document")
 	}
 
 	// Step 2: encrypt
@@ -83,7 +89,7 @@ func (c *SopsClient) Encrypt(bytes []byte, o EncryptOpts) ([]byte, error) {
 	}
 	dataKey, errs := tree.GenerateDataKeyWithKeyServices(c.keyServices)
 	if len(errs) > 0 {
-		return nil, fmt.Errorf("failed to generate data key: %w", errors.Join(errs...))
+		return EncryptResults{}, fmt.Errorf("failed to generate data key: %w", errors.Join(errs...))
 	}
 	err = common.EncryptTree(common.EncryptTreeOpts{
 		DataKey: dataKey,
@@ -91,33 +97,35 @@ func (c *SopsClient) Encrypt(bytes []byte, o EncryptOpts) ([]byte, error) {
 		Cipher:  c.cipher,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt content: %w", err)
+		return EncryptResults{}, fmt.Errorf("failed to encrypt content: %w", err)
 	}
 
 	// Step 3: serialize
-	result, err := o.Encrypted.EmitEncryptedFile(tree)
+	encrypted, err := o.Encrypted.EmitEncryptedFile(tree)
 	if err != nil {
-		return nil, fmt.Errorf("failed to emit encrypted content: %w", err)
+		return EncryptResults{}, fmt.Errorf("failed to emit encrypted content: %w", err)
 	}
-
-	return result, nil
+	return EncryptResults{
+		Content:      encrypted,
+		LastModified: tree.Metadata.LastModified,
+	}, nil
 }
 
-func (c *SopsClient) MustEncrypt(bytes []byte, o EncryptOpts) []byte {
-	result, err := c.Encrypt(bytes, o)
-	if err != nil {
-		panic(err)
-	}
-	return result
+type EditOpts struct {
+	Stores
+	IgnoreMAC bool
 }
 
-type EditOpts DecryptOpts
+type EditResults struct {
+	Content  []byte
+	Metadata sops.Metadata
+}
 
-func (c *SopsClient) Edit(origin []byte, income []byte, o EditOpts) ([]byte, error) {
+func (c *SopsClient) Edit(origin []byte, income []byte, o EditOpts) (EditResults, error) {
 	// Step 1: deserialize origin
 	tree, err := o.Encrypted.LoadEncryptedFile(origin)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse encrypted content: %w", err)
+		return EditResults{}, fmt.Errorf("failed to parse encrypted content: %w", err)
 	}
 
 	// Step 2: decrypt
@@ -128,13 +136,13 @@ func (c *SopsClient) Edit(origin []byte, income []byte, o EditOpts) ([]byte, err
 		KeyServices: c.keyServices,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt content: %w", err)
+		return EditResults{}, fmt.Errorf("failed to decrypt content: %w", err)
 	}
 
 	// Step 3: deserialize income
 	branches, err := o.Decrypted.LoadPlainFile(income)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse plain content: %w", err)
+		return EditResults{}, fmt.Errorf("failed to parse plain content: %w", err)
 	}
 
 	// Step 4: merge
@@ -147,21 +155,16 @@ func (c *SopsClient) Edit(origin []byte, income []byte, o EditOpts) ([]byte, err
 		Cipher:  c.cipher,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt content: %w", err)
+		return EditResults{}, fmt.Errorf("failed to encrypt content: %w", err)
 	}
 
 	// Step 6: serialize
-	result, err := o.Encrypted.EmitEncryptedFile(tree)
+	encrypted, err := o.Encrypted.EmitEncryptedFile(tree)
 	if err != nil {
-		return nil, fmt.Errorf("failed to emit encrypted content: %w", err)
+		return EditResults{}, fmt.Errorf("failed to emit encrypted content: %w", err)
 	}
-	return result, nil
-}
-
-func (c *SopsClient) MustEdit(origin []byte, income []byte, o EditOpts) []byte {
-	result, err := c.Edit(origin, income, o)
-	if err != nil {
-		panic(err)
-	}
-	return result
+	return EditResults{
+		Content:  encrypted,
+		Metadata: tree.Metadata,
+	}, nil
 }

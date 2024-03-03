@@ -290,7 +290,8 @@ var DefaultCryptRules = CryptRules{
 }
 
 type MetadataOpts struct {
-	Version string
+	Version      string
+	LastModified time.Time
 	KeyGroupsOpts
 	CryptRules
 }
@@ -312,6 +313,7 @@ func NewMetadata(o *MetadataOpts) sops.Metadata {
 	kgs := NewKeyGroups(&o.KeyGroupsOpts)
 	return sops.Metadata{
 		Version:           o.Version,
+		LastModified:      o.LastModified,
 		KeyGroups:         kgs.Groups,
 		ShamirThreshold:   kgs.ShamirThreshold,
 		UnencryptedSuffix: o.UnencryptedSuffix,
@@ -327,7 +329,8 @@ func RecoverMetadataOpts(m *sops.Metadata) MetadataOpts {
 		ShamirThreshold: m.ShamirThreshold,
 	})
 	return MetadataOpts{
-		Version: m.Version,
+		Version:      m.Version,
+		LastModified: m.LastModified,
 		KeyGroupsOpts: KeyGroupsOpts{
 			Groups:          kgs.Groups,
 			ShamirThreshold: kgs.ShamirThreshold,

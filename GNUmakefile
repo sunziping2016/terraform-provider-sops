@@ -46,4 +46,7 @@ release: crossbuild
 	cd releases; sha256sum *.zip | tee terraform-provider-sops_$(RELEASE)_SHA256SUMS
 	hub release edit -m "" -a "releases/terraform-provider-sops_$(RELEASE)_SHA256SUMS#terraform-provider-sops_$(RELEASE)_SHA256SUMS" $(VERSION)
 
-.PHONY: all style vet test build crossbuild release
+watch:
+	watchexec -e go $(MAKE) build
+
+.PHONY: all style vet test build crossbuild release watch
