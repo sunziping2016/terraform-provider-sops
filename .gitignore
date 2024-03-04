@@ -4,5 +4,11 @@ releases/
 terraform-provider-sops
 .direnv/
 result
-.terraformrc
 .vscode/
+local.tfrc
+
+.terraform
+*.tfstate
+*.tfstate.*
+
+examples/**/.terraform.lock.hcl

@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/getsops/sops/v3 v3.8.1
 	github.com/hashicorp/terraform-plugin-framework v1.5.0
+	github.com/hashicorp/terraform-plugin-framework-timetypes v0.3.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.12.0
 	github.com/hashicorp/terraform-plugin-go v0.21.0
 	github.com/hashicorp/terraform-plugin-testing v1.6.0

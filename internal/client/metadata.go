@@ -40,7 +40,7 @@ type (
 		KeyName      string
 		KeyVersion   string
 	}
-	HCVaultOpts struct {
+	HCVaultKeyOpts struct {
 		CreationDate time.Time
 		VaultAddress string
 		EnginePath   string
@@ -54,7 +54,7 @@ type KeyOpts struct {
 	KmsKeyOpts     *KmsKeyOpts
 	GcpKmsKeyOpts  *GcpKmsKeyOpts
 	AzureKVKeyOpts *AzureKVKeyOpts
-	HCVaultOpts    *HCVaultOpts
+	HCVaultKeyOpts *HCVaultKeyOpts
 }
 
 func (o *KeyOpts) Validate() error {
@@ -74,7 +74,7 @@ func (o *KeyOpts) Validate() error {
 	if o.AzureKVKeyOpts != nil {
 		keyCount++
 	}
-	if o.HCVaultOpts != nil {
+	if o.HCVaultKeyOpts != nil {
 		keyCount++
 	}
 	if keyCount == 0 {
@@ -122,8 +122,8 @@ func NewKey(o *KeyOpts) keys.MasterKey {
 			Name:         opts.KeyName,
 			Version:      opts.KeyVersion,
 		}
-	case o.HCVaultOpts != nil:
-		opts := o.HCVaultOpts
+	case o.HCVaultKeyOpts != nil:
+		opts := o.HCVaultKeyOpts
 		return &hcvault.MasterKey{
 			CreationDate: opts.CreationDate,
 			VaultAddress: opts.VaultAddress,
@@ -167,7 +167,7 @@ func RecoverKeyOpts(key keys.MasterKey) KeyOpts {
 			KeyVersion:   k.Version,
 		}}
 	case *hcvault.MasterKey:
-		return KeyOpts{HCVaultOpts: &HCVaultOpts{
+		return KeyOpts{HCVaultKeyOpts: &HCVaultKeyOpts{
 			CreationDate: k.CreationDate,
 			VaultAddress: k.VaultAddress,
 			EnginePath:   k.EnginePath,

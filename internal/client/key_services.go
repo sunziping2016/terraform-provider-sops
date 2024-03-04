@@ -23,7 +23,7 @@ func (b *KeyServiceBuilder) AddLocalKeyService() {
 	b.keyServices = append(b.keyServices, keyservice.NewLocalClient())
 }
 
-func (b *KeyServiceBuilder) AddKeyServiceWithURI(keyServiceURI string) error {
+func (b *KeyServiceBuilder) AddKeyServiceWithURI(ctx context.Context, keyServiceURI string) error {
 	url, err := url.Parse(keyServiceURI)
 	if err != nil {
 		return fmt.Errorf("failed to parse key service URI: %w", err)
@@ -32,7 +32,7 @@ func (b *KeyServiceBuilder) AddKeyServiceWithURI(keyServiceURI string) error {
 	if url.Scheme == "unix" {
 		addr = url.Path
 	}
-	conn, err := grpc.Dial(addr,
+	conn, err := grpc.DialContext(ctx, addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(
 			func(ctx context.Context, addr string) (net.Conn, error) {

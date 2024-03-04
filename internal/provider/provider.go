@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -23,6 +24,8 @@ var (
 	_ provider.Provider = (*sopsProvider)(nil)
 )
 
+const configFileName = ".sops.yaml"
+
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
 		return &sopsProvider{
@@ -36,8 +39,15 @@ type sopsProvider struct {
 }
 
 type sopsProviderModel struct {
-	DisableLocalKeyService types.Bool `tfsdk:"disable_local_key_service"`
-	KeyServiceURIs         types.Set  `tfsdk:"key_service_uris"`
+	DisableLocalKeyService     types.Bool   `tfsdk:"disable_local_key_service"`
+	KeyServiceURIs             types.Set    `tfsdk:"key_service_uris"`
+	ConfigFile                 types.String `tfsdk:"config_file"`
+	DisableConfigFileDiscovery types.Bool   `tfsdk:"disable_config_file_discovery"`
+}
+
+type sopsProviderData struct {
+	client.SopsClient
+	configFile *string
 }
 
 func (p *sopsProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -70,6 +80,22 @@ func (p *sopsProvider) Schema(ctx context.Context, req provider.SchemaRequest, r
 					),
 				},
 			},
+			"config_file": schema.StringAttribute{
+				Optional: true,
+				MarkdownDescription: "The path to the SOPS configuration file. " +
+					"Can also be set using the `SOPS_CONFIG_FILE` environment variable. " +
+					"The file should follow the `.sops.yaml` format. " +
+					"See the `config_file` attribute in the resource documentation for its usage.",
+			},
+			"disable_config_file_discovery": schema.BoolAttribute{
+				Optional: true,
+				MarkdownDescription: "Disable the discovery of the SOPS configuration file. " +
+					"Can also be set using a non-empty `SOPS_DISABLE_CONFIG_FILE_DISCOVERY` environment variable. " +
+					"By default, the provider will recursively search for a `.sops.yaml` file in the current directory and its parents. " +
+					"If none is found, the provider will generated a warning. " +
+					"To disable this behavior, set this attribute to `true`. " +
+					"This option is ignored if `config_file` is set.",
+			},
 		},
 	}
 }
@@ -88,12 +114,25 @@ func (p *sopsProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 			"Cannot initialize the provider without knowing whether to disable the local key service",
 		)
 	}
-
 	if data.KeyServiceURIs.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("key_service_uris"),
 			"Unknown key service URIs",
 			"Cannot initialize the provider without knowing the key service URIs",
+		)
+	}
+	if data.ConfigFile.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("config_file"),
+			"Unknown SOPS configuration file",
+			"Cannot initialize the provider without knowing the SOPS configuration file",
+		)
+	}
+	if data.DisableConfigFileDiscovery.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("disable_config_file_discovery"),
+			"Unknown option for disabling the discovery of the SOPS configuration file",
+			"Cannot initialize the provider without knowing whether to disable the discovery of the SOPS configuration file",
 		)
 	}
 	if resp.Diagnostics.HasError() {
@@ -105,7 +144,6 @@ func (p *sopsProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	if !data.DisableLocalKeyService.IsNull() {
 		if !data.DisableLocalKeyService.ValueBool() {
 			keyServiceBuilder.AddLocalKeyService()
-
 		}
 	} else if os.Getenv("SOPS_DISABLE_LOCAL_KEY_SERVICE") == "" {
 		keyServiceBuilder.AddLocalKeyService()
@@ -132,7 +170,7 @@ func (p *sopsProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 				)
 				continue
 			}
-			err := keyServiceBuilder.AddKeyServiceWithURI(elem.ValueString())
+			err := keyServiceBuilder.AddKeyServiceWithURI(ctx, elem.ValueString())
 			if err != nil {
 				resp.Diagnostics.AddAttributeError(
 					path.Root("key_service_uris").AtSetValue(elem),
@@ -144,7 +182,7 @@ func (p *sopsProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	} else if envKeyServiceURIs := os.Getenv("SOPS_KEY_SERVICE_URIS"); envKeyServiceURIs != "" {
 		keyServiceURIs := strings.Split(envKeyServiceURIs, ",")
 		for _, keyServiceURI := range keyServiceURIs {
-			err := keyServiceBuilder.AddKeyServiceWithURI(keyServiceURI)
+			err := keyServiceBuilder.AddKeyServiceWithURI(ctx, keyServiceURI)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Invalid key service URI",
@@ -158,15 +196,92 @@ func (p *sopsProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
+	var configFile *string
+	if !data.ConfigFile.IsNull() {
+		fileInfo, err := os.Stat(data.ConfigFile.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("config_file"),
+				"Failed to access the SOPS configuration file",
+				err.Error(),
+			)
+		} else if !fileInfo.Mode().IsRegular() {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("config_file"),
+				"Invalid SOPS configuration file",
+				"The SOPS configuration file must be a regular file",
+			)
+		}
+		configFile = data.ConfigFile.ValueStringPointer()
+	} else if envConfigFile := os.Getenv("SOPS_CONFIG_FILE"); envConfigFile != "" {
+		fileInfo, err := os.Stat(envConfigFile)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to access the SOPS configuration file",
+				err.Error(),
+			)
+		} else if !fileInfo.Mode().IsRegular() {
+			resp.Diagnostics.AddError(
+				"Invalid SOPS configuration file",
+				"The SOPS configuration file must be a regular file",
+			)
+		}
+		configFile = &envConfigFile
+	} else {
+		var disableConfigFileDiscovery bool
+		if !data.DisableConfigFileDiscovery.IsNull() {
+			disableConfigFileDiscovery = data.DisableConfigFileDiscovery.ValueBool()
+		} else if os.Getenv("SOPS_DISABLE_CONFIG_FILE_DISCOVERY") != "" {
+			disableConfigFileDiscovery = true
+		}
+		if !disableConfigFileDiscovery {
+			currentDir, err := os.Getwd()
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to get the current working directory", err.Error())
+			} else {
+				for {
+					filePath := filepath.Join(currentDir, configFileName)
+					fileInfo, err := os.Stat(filePath)
+					if !os.IsNotExist(err) {
+						if err != nil {
+							resp.Diagnostics.AddError("Failed to access the SOPS configuration file", err.Error())
+						} else if !fileInfo.Mode().IsRegular() {
+							resp.Diagnostics.AddError("Invalid SOPS configuration file",
+								"The SOPS configuration file must be a regular file")
+						}
+						configFile = &filePath
+						break
+					}
+					parentDir := filepath.Dir(currentDir)
+					if parentDir == currentDir {
+						break
+					}
+					currentDir = parentDir
+				}
+				if configFile == nil {
+					resp.Diagnostics.AddWarning("Failed to find the SOPS configuration file",
+						"The provider could not find a `.sops.yaml` file in the current directory and its parents. "+
+							"You can disable this behavior by setting the `disable_config_file_discovery` attribute to `true`.")
+				}
+			}
+		}
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	keyServices, err := keyServiceBuilder.Build()
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to initialize key services", err.Error())
 		return
 	}
 
-	sopsClient := client.NewSopsClient(keyServices)
-	resp.DataSourceData = sopsClient
-	resp.ResourceData = sopsClient
+	providerData := sopsProviderData{
+		SopsClient: client.NewSopsClient(keyServices),
+		configFile: configFile,
+	}
+	resp.DataSourceData = &providerData
+	resp.ResourceData = &providerData
 }
 
 func (p *sopsProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
@@ -177,6 +292,6 @@ func (p *sopsProvider) DataSources(ctx context.Context) []func() datasource.Data
 
 func (p *sopsProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		// NewSopsFileResource,
+		NewSopsEncryptResource,
 	}
 }

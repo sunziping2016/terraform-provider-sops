@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"fmt"
-	"regexp"
 	"testing"
 
 	r "github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -25,11 +24,6 @@ data "sops_decrypt" "basic" {
 	format = "yaml"
 	encrypted_content = %q
 }`, basicEncryptedYaml)
-	// fallback to the binary format, which should cause an error
-	var config2 = fmt.Sprintf(`
-data "sops_decrypt" "basic" {
-	encrypted_content = %q
-}`, basicEncryptedYaml)
 
 	r.UnitTest(t, r.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -42,10 +36,6 @@ data "sops_decrypt" "basic" {
 					r.TestCheckResourceAttr("data.sops_decrypt.basic", "decrypted_content", string(basicDecryptedYaml)),
 					r.TestCheckResourceAttr("data.sops_decrypt.basic", "decrypted_content_base64", base64.StdEncoding.EncodeToString(basicDecryptedYaml)),
 				),
-			},
-			{
-				Config:      config2,
-				ExpectError: regexp.MustCompile(`Failed to decrypt content`),
 			},
 		},
 	})

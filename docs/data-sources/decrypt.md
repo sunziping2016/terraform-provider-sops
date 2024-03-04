@@ -18,15 +18,15 @@ Decrypt an encrypted content or file using SOPS.
 ### Optional
 
 - `decrypted_format` (String) The format of the decrypted content. Valid values are `json`, `yaml`, `ini`, `dotenv` and `binary`. See `encrypted_format` for more information.
-- `encrypted_content` (String) The encrypted content that will be decrypted, expected to be UTF-8 encoded. Conflicts with `source` and `encrypted_content_base64`. Exactly one of `source`, `encrypted_content` or `encrypted_content_base64` must be specified.
-- `encrypted_content_base64` (String) The base64 encoded encrypted content that will be decrypted. Conflicts with `encrypted_content` and `source`. Exactly one of `source`, `encrypted_content` or `encrypted_content_base64` must be specified.
+- `encrypted_content` (String) The encrypted content that will be decrypted, expected to be UTF-8 encoded. Exactly one of `source`, `encrypted_content` or `encrypted_content_base64` must be specified.
+- `encrypted_content_base64` (String) The base64 encoded encrypted content that will be decrypted. Exactly one of `source`, `encrypted_content` or `encrypted_content_base64` must be specified.
 - `encrypted_format` (String) The format of the encrypted content. Valid values are `json`, `yaml`, `ini`, `dotenv` and `binary`. Conflicts with `format`. `encrypted_format` and `decrypted_format` should be set together. This allows you to specify different formats for the encrypted and decrypted content. If you want to use the same format for both the encrypted and decrypted content, you can use `format` instead.
-- `format` (String) The format of both the encrypted and decrypted content. Valid values are `json`, `yaml`, `ini`, `dotenv` and `binary`. Conflicts with `encrypted_format` and `decrypted_format`. You should specify either `format`, or both `encrypted_format` and `decrypted_format`. When none of these are set, if `source` is provided, the format will be inferred from the filename, and otherwise it will default to `binary`.
+- `format` (String) The format of both the encrypted and decrypted content. Valid values are `json`, `yaml`, `ini`, `dotenv` and `binary`. You should specify either `format`, or both `encrypted_format` and `decrypted_format`. When none of these are set, if `source` is provided, the format will be inferred from the filename, and otherwise it will default to `binary`.
 - `ignore_mac` (Boolean) Ignore the Message Authentication Code (MAC) during decryption. MACs are used to verify the integrity of the encrypted content. Setting this to `true` only if you are sure that the encrypted content has not been tampered with.
-- `source` (String) Path to the file containing the encrypted content that will be decrypted. Conflicts with `encrypted_content` and `encrypted_content_base64`. Exactly one of `source`, `encrypted_content` or `encrypted_content_base64` must be specified.
+- `source` (String) Path to the file containing the encrypted content that will be decrypted. Exactly one of `source`, `encrypted_content` or `encrypted_content_base64` must be specified.
 
 ### Read-Only
 
-- `decrypted_content` (String) The decrypted content, expected to be UTF-8 encoded. Invalid UTF-8 sequences will be replaced with the Unicode replacement character.
-- `decrypted_content_base64` (String) The base64 encoded decrypted content. Use this when dealing with binary data.
+- `decrypted_content` (String, Sensitive) The decrypted content, expected to be UTF-8 encoded. Invalid UTF-8 sequences will be replaced with the Unicode replacement character.
+- `decrypted_content_base64` (String, Sensitive) The base64 encoded decrypted content. Use this when dealing with binary data.
 - `id` (String) The id of the data source. This will always be set to `-`

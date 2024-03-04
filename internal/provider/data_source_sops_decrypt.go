@@ -28,15 +28,17 @@ func NewSopsDecryptDataSource() datasource.DataSource {
 }
 
 type sopsDecryptDataSource struct {
-	client *client.SopsClient
+	client *sopsProviderData
 }
 
 type sopsDecryptDataSourceModel struct {
-	Id                     types.String `tfsdk:"id"`
-	Format                 types.String `tfsdk:"format"`
-	EncryptedFormat        types.String `tfsdk:"encrypted_format"`
-	DecryptedFormat        types.String `tfsdk:"decrypted_format"`
-	IgnoreMAC              types.Bool   `tfsdk:"ignore_mac"`
+	Id types.String `tfsdk:"id"`
+
+	Format          types.String `tfsdk:"format"`
+	EncryptedFormat types.String `tfsdk:"encrypted_format"`
+	DecryptedFormat types.String `tfsdk:"decrypted_format"`
+	IgnoreMAC       types.Bool   `tfsdk:"ignore_mac"`
+
 	Source                 types.String `tfsdk:"source"`
 	EncryptedContent       types.String `tfsdk:"encrypted_content"`
 	EncryptedContentBase64 types.String `tfsdk:"encrypted_content_base64"`
@@ -60,7 +62,6 @@ func (n *sopsDecryptDataSource) Schema(ctx context.Context, req datasource.Schem
 			"format": schema.StringAttribute{
 				MarkdownDescription: "The format of both the encrypted and decrypted content. " +
 					"Valid values are `json`, `yaml`, `ini`, `dotenv` and `binary`. " +
-					"Conflicts with `encrypted_format` and `decrypted_format`. " +
 					"You should specify either `format`, or both `encrypted_format` and `decrypted_format`. " +
 					"When none of these are set, if `source` is provided, the format will be inferred from the filename, " +
 					"and otherwise it will default to `binary`.",
@@ -101,31 +102,30 @@ func (n *sopsDecryptDataSource) Schema(ctx context.Context, req datasource.Schem
 			},
 			"encrypted_content": schema.StringAttribute{
 				MarkdownDescription: "The encrypted content that will be decrypted, expected to be UTF-8 encoded. " +
-					"Conflicts with `source` and `encrypted_content_base64`. " +
 					"Exactly one of `source`, `encrypted_content` or `encrypted_content_base64` must be specified.",
 				Optional: true,
 			},
 			"source": schema.StringAttribute{
 				MarkdownDescription: "Path to the file containing the encrypted content that will be decrypted. " +
-					"Conflicts with `encrypted_content` and `encrypted_content_base64`. " +
 					"Exactly one of `source`, `encrypted_content` or `encrypted_content_base64` must be specified.",
 				Optional: true,
 			},
 			"encrypted_content_base64": schema.StringAttribute{
 				MarkdownDescription: "The base64 encoded encrypted content that will be decrypted. " +
-					"Conflicts with `encrypted_content` and `source`. " +
 					"Exactly one of `source`, `encrypted_content` or `encrypted_content_base64` must be specified.",
 				Optional: true,
 			},
 			"decrypted_content": schema.StringAttribute{
 				MarkdownDescription: "The decrypted content, expected to be UTF-8 encoded. " +
 					"Invalid UTF-8 sequences will be replaced with the Unicode replacement character.",
-				Computed: true,
+				Computed:  true,
+				Sensitive: true,
 			},
 			"decrypted_content_base64": schema.StringAttribute{
 				MarkdownDescription: "The base64 encoded decrypted content. " +
 					"Use this when dealing with binary data.",
-				Computed: true,
+				Computed:  true,
+				Sensitive: true,
 			},
 		},
 	}
@@ -136,11 +136,11 @@ func (d *sopsDecryptDataSource) Configure(ctx context.Context, req datasource.Co
 		return
 	}
 
-	client, ok := req.ProviderData.(*client.SopsClient)
+	client, ok := req.ProviderData.(*sopsProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.SopsClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *sopsProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -158,37 +158,46 @@ func (d *sopsDecryptDataSource) ConfigValidators(context.Context) []datasource.C
 			path.MatchRoot("format"),
 			path.MatchRoot("encrypted_format"),
 		),
+		datasourcevalidator.Conflicting(
+			path.MatchRoot("format"),
+			path.MatchRoot("encrypted_format"),
+		),
 		datasourcevalidator.RequiredTogether(
 			path.MatchRoot("encrypted_format"),
 			path.MatchRoot("decrypted_format"),
+		),
+		datasourcevalidator.AtLeastOneOf(
+			path.MatchRoot("format"),
+			path.MatchRoot("encrypted_format"),
+			path.MatchRoot("decrypted_format"),
+			path.MatchRoot("source"),
 		),
 	}
 }
 
 func (n *sopsDecryptDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data sopsDecryptDataSourceModel
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	var config sopsDecryptDataSourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	var storeOpts client.StoreOpts
-	if !data.Format.IsNull() && !data.Format.IsUnknown() {
-		format := client.StringToFormat[data.Format.ValueString()]
+	if !config.Format.IsNull() {
+		format := client.StringToFormat[config.Format.ValueString()]
 		storeOpts.EncryptedFormat = format
 		storeOpts.DecryptedFormat = format
-	} else if !data.DecryptedFormat.IsNull() && !data.EncryptedFormat.IsNull() &&
-		!data.DecryptedContent.IsUnknown() && !data.EncryptedContent.IsUnknown() {
-		storeOpts.EncryptedFormat = client.StringToFormat[data.EncryptedFormat.ValueString()]
-		storeOpts.DecryptedFormat = client.StringToFormat[data.DecryptedFormat.ValueString()]
+	} else if !config.DecryptedFormat.IsNull() && !config.EncryptedFormat.IsNull() {
+		storeOpts.EncryptedFormat = client.StringToFormat[config.EncryptedFormat.ValueString()]
+		storeOpts.DecryptedFormat = client.StringToFormat[config.DecryptedFormat.ValueString()]
 	} else {
-		format := formats.FormatForPath(data.Source.ValueString())
+		format := formats.FormatForPath(config.Source.ValueString())
 		storeOpts.EncryptedFormat = format
 		storeOpts.DecryptedFormat = format
 	}
-	stores := client.NewStores(&storeOpts)
-	ignoreMAC := data.IgnoreMAC.ValueBool()
-	encryptedContent, err := parseEncryptedContent(data)
+	stores := client.NewStores(storeOpts)
+	ignoreMAC := config.IgnoreMAC.ValueBool()
+	encryptedContent, err := parseEncryptedContent(config)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to load encrypted content", err.Error())
 		return
@@ -203,23 +212,21 @@ func (n *sopsDecryptDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	data.Id = types.StringValue("-")
-	data.EncryptedFormat = types.StringValue(client.FormatToString[storeOpts.EncryptedFormat])
-	data.DecryptedFormat = types.StringValue(client.FormatToString[storeOpts.DecryptedFormat])
-	data.DecryptedContent = types.StringValue(string(decrypted.Content))
-	data.DecryptedContentBase64 = types.StringValue(base64.StdEncoding.EncodeToString(decrypted.Content))
+	config.Id = types.StringValue("-")
+	config.EncryptedFormat = types.StringValue(client.FormatToString[storeOpts.EncryptedFormat])
+	config.DecryptedFormat = types.StringValue(client.FormatToString[storeOpts.DecryptedFormat])
+	config.DecryptedContent = types.StringValue(string(decrypted.Content))
+	config.DecryptedContentBase64 = types.StringValue(base64.StdEncoding.EncodeToString(decrypted.Content))
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
 func parseEncryptedContent(data sopsDecryptDataSourceModel) ([]byte, error) {
-	if !data.EncryptedContentBase64.IsNull() && !data.EncryptedContentBase64.IsUnknown() {
+	if !data.EncryptedContentBase64.IsNull() {
 		return base64.StdEncoding.DecodeString(data.EncryptedContentBase64.ValueString())
 	}
-
-	if !data.Source.IsNull() && !data.Source.IsUnknown() {
+	if !data.Source.IsNull() {
 		return os.ReadFile(data.Source.ValueString())
 	}
-
 	return []byte(data.EncryptedContent.ValueString()), nil
 }

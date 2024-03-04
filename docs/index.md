@@ -13,8 +13,28 @@ description: |-
 ## Example Usage
 
 ```terraform
+terraform {
+  required_providers {
+    sops = {
+      source  = "sunziping2016/sops"
+      version = "~> 0.1"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+  }
+}
+
 data "sops_decrypt" "basic" {
-  source = "./basic.yaml"
+  source           = "./basic.yaml"
+  encrypted_format = "yaml"
+  decrypted_format = "json"
+}
+
+resource "sops_encrypt" "basic" {
+  unencrypted_content = data.sops_decrypt.basic.decrypted_content
+  format              = "yaml"
 }
 ```
 
@@ -23,5 +43,7 @@ data "sops_decrypt" "basic" {
 
 ### Optional
 
+- `config_file` (String) The path to the SOPS configuration file. Can also be set using the `SOPS_CONFIG_FILE` environment variable. The file should follow the `.sops.yaml` format. See the `config_file` attribute in the resource documentation for its usage.
+- `disable_config_file_discovery` (Boolean) Disable the discovery of the SOPS configuration file. Can also be set using a non-empty `SOPS_DISABLE_CONFIG_FILE_DISCOVERY` environment variable. By default, the provider will recursively search for a `.sops.yaml` file in the current directory and its parents. If none is found, the provider will generated a warning. To disable this behavior, set this attribute to `true`. This option is ignored if `config_file` is set.
 - `disable_local_key_service` (Boolean) Disable the local key service. Can also be set using a non-empty `SOPS_DISABLE_LOCAL_KEY_SERVICE` environment variable. If set, you must provide `key_service_uris` to make the key discovery work.
 - `key_service_uris` (Set of String) The URIs of the key service. Can also be set using the comma-separated `SOPS_KEY_SERVICE_URIS` environment variable. You can start the server-side key service by running `sops keyserver` to enable remote key discovery. Examples: `tcp://myserver.com:5000`, `unix:///var/run/sops.sock`.

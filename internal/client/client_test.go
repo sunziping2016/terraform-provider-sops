@@ -25,7 +25,7 @@ var testMetadataOpts = MetadataOpts{
 
 func TestSopsClient(t *testing.T) {
 	sopsClient := NewSopsClient(DefaultKeyService())
-	stores := NewStores(&StoreOpts{
+	stores := NewStores(StoreOpts{
 		DecryptedFormat: formats.Yaml,
 		EncryptedFormat: formats.Json,
 	})

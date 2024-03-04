@@ -26,21 +26,29 @@
       devShells = forAllSystems (system:
         let
           pkgs = nixpkgsFor.${system};
+          my-terraform = pkgs.terraform.withPlugins (ps: with ps; [ random ]);
         in
         {
           default = pkgs.mkShell {
             buildInputs = with pkgs; [ go gopls gotools go-tools gox delve sops tfplugindocs terraform watchexec ];
             shellHook = ''
-              cat <<EOF > .terraformrc
+              cat <<EOF > local.tfrc
               provider_installation {
                 dev_overrides {
-                  "sops" = "$(pwd)"
+                  "sunziping2016/sops" = "$(pwd)"
                 }
-                direct {}
+                filesystem_mirror {
+                  path    = "$(pwd)/binaries"
+                  include = [ "*/*" ]
+                }
+                filesystem_mirror {
+                  path    = "${my-terraform}/libexec/terraform-providers"
+                  include = [ "*/*" ]
+                }
               }
               EOF
 
-              export TF_CLI_CONFIG_FILE="$(pwd)/.terraformrc"
+              export TF_CLI_CONFIG_FILE="$(pwd)/local.tfrc"
             '';
             hardeningDisable = [ "fortify" ];
           };

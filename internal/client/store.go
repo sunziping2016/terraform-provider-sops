@@ -33,7 +33,7 @@ type StoreOpts struct {
 }
 
 func NewStores(
-	o *StoreOpts,
+	o StoreOpts,
 ) Stores {
 	return Stores{
 		Encrypted: common.StoreForFormat(o.EncryptedFormat),

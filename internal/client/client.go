@@ -16,8 +16,8 @@ type SopsClient struct {
 	keyServices []keyservice.KeyServiceClient
 }
 
-func NewSopsClient(keyServices []keyservice.KeyServiceClient) *SopsClient {
-	return &SopsClient{
+func NewSopsClient(keyServices []keyservice.KeyServiceClient) SopsClient {
+	return SopsClient{
 		cipher:      aes.NewCipher(),
 		keyServices: keyServices,
 	}
